@@ -1,13 +1,13 @@
 <template>
 
 	<div>
-		<div v-if="title">
-			<h1>{{ title }}</h1>
+		<div v-if="sectionTitle">
+			<h1>{{ sectionTitle }}</h1>
 		</div>
 
 		<div class="form-content">
 			<div
-				v-for="column in columns.filter(item => !item.isPk)"
+				v-for="column in localColumns.filter(item => !item.isPk)"
 			  :key="column"
 				class="form-line"
 	    >
@@ -66,34 +66,80 @@
 import axios from "axios";
 import { HttpRequestService } from "../services/HttpRequestService";
 import DateTimeTransformer from "../transformers/DateTimeTransformer";
-import XButton from "./components/XButton.vue";
-import XInput from "./components/XInput.vue";
-import XPassword from "./components/XPassword.vue";
-import XSelect from "./components/XSelect.vue";
-import XCheckbox from "./components/XCheckbox.vue";
-import XDate from "./components/XDate.vue";
-import { defineProps, toRefs, ref, onBeforeMount, defineEmits } from "vue";
+import XButton from "../components/XButton.vue";
+import XInput from "../components/XInput.vue";
+import XPassword from "../components/XPassword.vue";
+import XSelect from "../components/XSelect.vue";
+import XCheckbox from "../components/XCheckbox.vue";
+import XDate from "../components/XDate.vue";
+import { defineProps, toRefs, ref, reactive, onBeforeMount, defineEmits } from "vue";
 
 const props = defineProps({
-	title: String,
-	columns: Array,
-	values: Object,
+	sectionTitle: String,
+	columns: {
+		type: Array,
+		default: []
+	},
+	values: {
+		type: Object,
+		default: null
+	},
 	url: Object,
-	hasCloseButton: Boolean,
-	hasSaveButton: { type: Boolean, default: true }
+	hasCloseButton: {
+		type: Boolean,
+		default: false
+	},
+	hasSaveButton: {
+		type: Boolean,
+		default: true
+	}
 });
 
-const { title, columns, values, url, hasCloseButton, hasSaveButton } = toRefs(props);
+const { sectionTitle, columns, values, url, hasCloseButton, hasSaveButton } = toRefs(props);
 
-const emit = defineEmits(["sve", "close"]);
+const emit = defineEmits(["close"]);
 
-let form = ref({});
+/**
+ *
+ * @type {Ref<UnwrapRef<*[]>, UnwrapRef<*[]> | *[]>}
+ */
+let localColumns = ref([]);
+
+/**
+ * All form values
+ * @type {Object}
+ */
+let form = reactive({});
+
+/**
+ * Get form structure and its values from props or through get api if it's possible
+ */
+const getFormStructureAndValues = () => {
+	if (values.value || columns.value.length) {
+		form = values.value;
+		localColumns = columns;
+		return;
+	}
+
+	if (url.value.get) {
+		axios
+			.get(url.value.get, {
+				params: {
+					list: ['columns', 'values']
+				}
+			})
+			.then(response => {
+				localColumns.value = response.data.columns;
+				form = response.data.values ?? {};
+			});
+	}
+};
 
 /**
  * Init form values
  */
 onBeforeMount(() => {
-	form = values;
+	getFormStructureAndValues();
 });
 
 /**
@@ -101,7 +147,8 @@ onBeforeMount(() => {
  * @return {Object}
  */
 const getValues = () => {
-	let values = { ... form.value };
+	let values = { ... form };
+
 	columns.value.forEach(column => {
 		if (column.type === "datetime") {
 			values[column.field] = DateTimeTransformer.reverseTransform(values[column.field]);
@@ -111,6 +158,9 @@ const getValues = () => {
 	return values;
 };
 
+/**
+ * We need to do some actions from a parent component
+ */
 defineExpose({
 	getValues
 });

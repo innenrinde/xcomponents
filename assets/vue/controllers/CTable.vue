@@ -3,7 +3,7 @@
 
     <div class="header-bar">
 
-			<h1><span>{{ pager.total }} records</span><b>{{ title }}</b></h1>
+			<h1><span>{{ pager.total }} records</span><b>{{ sectionTitle }}</b></h1>
 
 			<x-input
 				type="text"
@@ -15,7 +15,7 @@
     </div>
 
     <x-table
-			v-show="pager.total"
+			v-if="columns.length"
 			:columns="columns"
 			:rows="localRows"
 			:pager="pager"
@@ -46,7 +46,7 @@
 		@ok="confirmEditRow"
 	>
 		<template #content>
-			<Form
+			<c-form
 				ref="form"
 				:columns="columns"
 				:values="editForm"
@@ -56,7 +56,7 @@
 		</template>
 	</x-panel>
 
-	<search-panel
+	<c-search-panel
 		v-if="searchFocus"
 		:query-text="query"
 		@close="closeSearch"
@@ -70,29 +70,43 @@ import { defineProps, defineModel, toRefs, reactive, ref, onMounted } from "vue"
 import { kNNSearch } from "../lib/kNNSearch";
 import { HttpRequestService } from "../services/HttpRequestService";
 import axios from "axios";
-import XPanel from "./components/XPanel.vue";
-import XInput from "./components/XInput.vue";
-import SearchPanel from "./SearchPanel.vue";
-import XTable from "./components/XTable.vue";
+import XPanel from "../components/XPanel.vue";
+import XInput from "../components/XInput.vue";
+import CSearchPanel from "./CSearchPanel.vue";
+import XTable from "../components/XTable.vue";
 
 const props = defineProps({
 	title: String,
-	columns: Array,
-  rows: Array,
+	sectionTitle: String,
   url: Object,
 });
 
 const query = defineModel("");
 
-const { title, columns, url } = toRefs(props);
+const { sectionTitle, url } = toRefs(props);
 
 let pager = reactive({
 	total: 0,
 	page: 0,
-	// limit: 0
+	limit: 0,
 });
 
+/**
+ * List of columns fetched by api; no columns is like no table to display
+ * @type {Reactive<*[]>}
+ */
+let columns = reactive([]);
+
+/**
+ * all rows fetched by api
+ * @type {Array}
+ */
 let rows = [];
+
+/**
+ * locally filtered rows if a such action is performed
+ * @type {Reactive<*[]>}
+ */
 let localRows = reactive([]);
 
 let selectedRow = null;
@@ -123,7 +137,7 @@ const closeSearch = () => {
  * @returns {any}
  */
 const pk = () => {
-	let pk = columns.value.find(column => column.isPk);
+	let pk = columns.find(column => column.isPk);
 
 	if (!pk) {
 		throw new Error("Can't find a PK column!");
@@ -194,7 +208,6 @@ const editRow = (row) => {
  * Perform edit
  */
 const confirmEditRow = () => {
-	console.log(form.value);
 	axios
 		.post(url.value.post, form.value.getValues())
 		.then(response => {
@@ -225,7 +238,7 @@ const processEditedRow = (data) => {
 
 	let row = localRows.find(row => row[id.field] === data[id.field]);
 
-	columns.value.forEach(column => {
+	columns.forEach(column => {
 		if (data[column.field]) {
 			row[column.field] = data[column.field];
 		}
@@ -244,14 +257,18 @@ let kNN = new kNNSearch();
 const getTableDataList = () => {
   axios
     .get(url.value.get, {
-			params: { ...pager }
+			params: {
+				...pager,
+				list: ['columns', 'rows']
+			}
 		})
     .then(response => {
-      if (!response.data.content) {
-        throw new Error(`${url.value.get} response => .data.content not found`);
+      if (!response.data) {
+        throw new Error(`${url.value.get} response => .data not found`);
       }
 
-      rows = response.data.content;
+      columns = response.data.columns ?? [];
+      rows = response.data.rows ?? [];
 
 			let responsePager = response.data.pager;
 			pager.total = Number(responsePager.total);
@@ -283,7 +300,7 @@ onMounted(() => {
  * Get filtered rows
  */
 const applyResults = () => {
-  let results = kNN.applySearch(rows, columns.value);
+  let results = kNN.applySearch(rows, columns);
   localRows.splice(0);
   results.forEach(row => localRows.push(row));
 	searchFocus.value = false;
@@ -305,29 +322,32 @@ let applySearch = ({ value, k }) => {
 .container-table {
   font-size: 12px;
   height: 100%;
+	width: 100%;
   display: flex;
   flex-direction: column;
-	background-color: #fff;
+	background-color: var(--primary-background-color);
 }
 
 .header-bar {
-	padding: 20px 10px 0 10px;
+	padding: 10px 0 5px 0;
 	display: flex;
 	align-items: center;
 
 	h1 {
-		display: inline-block;
+		display: flex;
 		font-size: 14px;
 		font-weight: 400;
 		width: 100%;
-		color: #036593;
+		color: var(--secondary-color);
 
 		span {
-			background-color: #efefef;
+			background-color: var(--table-header-color);
 			margin-right: 10px;
 			padding: 2px 10px 2px 10px;
 			border-radius: 15px;
 			font-size: 12px;
+			white-space: nowrap;
+			align-content: center;
 		}
 	}
 

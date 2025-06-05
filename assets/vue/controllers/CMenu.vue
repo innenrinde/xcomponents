@@ -27,7 +27,7 @@
 					<div
 						v-for="child of item.children"
 						:key="child"
-						@click="goToRoute(child)"
+						@click="selectMenu(child)"
 						class="level2-item-title"
 						:class="{ 'active-item': child.active }"
 					>
@@ -48,10 +48,11 @@
 </template>
 
 <script setup>
-import { NotificationService } from "../services/NotificationService";
-import { defineProps, toRefs, ref, onBeforeMount } from "vue";
+import { defineProps, toRefs, onBeforeMount, defineEmits, reactive } from "vue";
 
 const DEFAULT_OPENEDS_KEY = "defaultOpeneds";
+
+const emit = defineEmits(["selectMenu"]);
 
 const props = defineProps({
 	title: String,
@@ -60,21 +61,41 @@ const props = defineProps({
 
 const { title, items } = toRefs(props);
 
-let localItems = ref([]);
-let defaultOpeneds = ref([]);
+/**
+ * List of all menus (hierarchically)
+ * @type {Reactive<*[]>}
+ */
+let localItems = reactive([]);
+
+/**
+ * Keep expanded menus to be shown after refresh
+ * @type {Array}
+ */
+let defaultOpeneds = [];
 
 /**
  * Init items menu opened by default
  */
 onBeforeMount(() => {
-	localItems.value = [ ...items.value ];
-	defaultOpeneds.value = getFromStorage(DEFAULT_OPENEDS_KEY);
+	localItems = [ ...items.value ];
 
-	localItems.value.map((item, index) => {
-		if (defaultOpeneds.value.includes(index)) {
+	// opened menu by default
+	defaultOpeneds = getFromStorage(DEFAULT_OPENEDS_KEY);
+	localItems.map((item, index) => {
+		if (defaultOpeneds.includes(index)) {
 			item.show = true;
 		}
 	});
+
+	// load first active menu
+	menus: for(let menu of localItems) {
+		for(let submenu of menu.children) {
+			if (submenu.active) {
+				emit("selectMenu", submenu);
+				break menus;
+			}
+		}
+	}
 });
 
 /**
@@ -102,21 +123,20 @@ const saveIntoStorage = (key, values) => {
 };
 
 /**
- * Redirect to url
- * @param {Object} menu
+ * Emit selected menu to be managed into parent component
+ * @param {Object} submenu
  */
-const goToRoute = (menu)=> {
-	if (menu.confirm) {
-		NotificationService.confirm({
-			title: menu.title,
-			message: "Are you sure that you want to continue?",
-			okAction: () => {
-				document.location.href = menu.route;
-			}
+const selectMenu = (submenu)=> {
+
+	localItems.forEach(menu => {
+		menu.children.forEach(submenu => {
+			submenu.active = false;
 		});
-	} else {
-		document.location.href = menu.route;
-	}
+	});
+
+	submenu.active = true;
+
+	emit("selectMenu", submenu);
 };
 
 /**
@@ -127,13 +147,13 @@ const goToRoute = (menu)=> {
 const expandItem = (item, index) => {
 	item.show = isActiveSubMenu(item) ? true : !item.show;
 
-	if (defaultOpeneds.value.includes(index)) {
-		defaultOpeneds.value = defaultOpeneds.value.filter(item => item !== index);
+	if (defaultOpeneds.includes(index)) {
+		defaultOpeneds = defaultOpeneds.filter(item => item !== index);
 	} else {
-		defaultOpeneds.value.push(index);
+		defaultOpeneds.push(index);
 	}
 
-	saveIntoStorage(DEFAULT_OPENEDS_KEY, defaultOpeneds.value);
+	saveIntoStorage(DEFAULT_OPENEDS_KEY, defaultOpeneds);
 };
 
 /**
@@ -150,8 +170,8 @@ const isActiveSubMenu = (item) => {
 .menu-panel {
 	width: 200px;
 	height: 100%;
-	background-color: #02557c;
-	color: #fff;
+	background-color: var(--primary-color);
+	color: var(--primary-text-color);
 	display: flex;
 	flex-direction: column;
 
@@ -160,12 +180,12 @@ const isActiveSubMenu = (item) => {
 	}
 
 	::-webkit-scrollbar-track {
-		box-shadow: inset 0 0 5px grey;
+		box-shadow: inset 0 0 5px var(--scrollbar-color);
 		border-radius: 5px;
 	}
 
 	::-webkit-scrollbar-thumb {
-		background: #0076ae;
+		background: var(--primary-button-color);
 		border-radius: 5px;
 	}
 }
@@ -190,14 +210,14 @@ const isActiveSubMenu = (item) => {
 		flex-direction: row;
 		align-items: center;
 		padding: 10px;
-		background-color: #036593;
+		background-color: var(--secondary-color);
 		border-radius: 5px;
 		cursor: pointer;
 		margin-top: 1px;
 		font-weight: 600;
 
 		&:hover {
-			background-color: #0076ae;
+			background-color: var(--primary-button-color);
 		}
 
 		.icon {
@@ -206,12 +226,12 @@ const isActiveSubMenu = (item) => {
 	}
 
 	.level1-item-title-active {
-		background-color: #0076ae;
+		background-color: var(--primary-button-color);
 		border-radius: 5px 5px 0 0;
 	}
 
 	.children {
-		background-color: #0076ae;
+		background-color: var(--primary-button-color);
 		border-radius: 0 0 5px 5px;
 		padding: 5px;
 		margin-bottom: 10px;
@@ -226,7 +246,7 @@ const isActiveSubMenu = (item) => {
 			cursor: pointer;
 
 			&:hover {
-				background-color: #036593;
+				background-color: var(--secondary-color);
 			}
 
 			.icon {
@@ -245,7 +265,7 @@ const isActiveSubMenu = (item) => {
 		}
 
 		.active-item {
-			background-color: #036593;
+			background-color: var(--secondary-color);
 
 			.icon-right {
 				display: inherit;

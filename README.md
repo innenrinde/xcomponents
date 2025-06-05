@@ -1,3 +1,3 @@
-VueJS components that can be used with Symfony WebpackEncoreBundle
+VueJS components that can be used with Symfony WebpackEncoreBundle.
 
-View https://admin.powerfullapp.ro
+Visit https://admin.powerfullapp.ro
